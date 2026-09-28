@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f2937">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Evaluaciones">
+<title>Evaluaciones Vento Chalco</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/styles.css?v=1">
+</head>
+<body>
+
+<div class="top">
+  <header>
+    <h1>Evaluaciones Vento Chalco</h1>
+    <p>Funciona sin internet · tus datos se quedan en este dispositivo</p>
+  </header>
+  <nav id="tabs">
+    <button data-tab="nueva" class="active">Nueva evaluación</button>
+    <button data-tab="criterios">Criterios</button>
+    <button data-tab="asesores">Asesores</button>
+    <button data-tab="historial">Historial</button>
+  </nav>
+</div>
+
+<main>
+  <section id="tab-nueva"></section>
+  <section id="tab-criterios" style="display:none"></section>
+  <section id="tab-asesores" style="display:none"></section>
+  <section id="tab-historial" style="display:none"></section>
+  <p class="pie-autoria">© 2026 Jesús Trapala · Todos los derechos reservados · Herramienta de uso interno para Agencia Vento Chalco. Prohibida su reproducción, distribución o uso en otras agencias sin autorización escrita del autor.</p>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/pdf.js?v=1"></script>
+<script src="js/app.js?v=1"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    // Si llega una versión nueva de la app, recarga una vez para usarla.
+    // Antes de recargar se escribe el borrador (lo hace el 'pagehide' de app.js).
+    const habiaVersion = !!navigator.serviceWorker.controller;
+    let recargado = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (habiaVersion && !recargado) { recargado = true; location.reload(); }
+    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then(r => r.update()).catch(() => {}));
+  }
+</script>
+</body>
+</html>
