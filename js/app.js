@@ -6,22 +6,26 @@
 /* ============================================================
    1) ESTADO / ALMACENAMIENTO LOCAL
    ============================================================ */
+// Pesos v2 (recalculados 2026-10-01): ventas y resultados 39%, procesos 27%,
+// actitud 14%, piso y presentación 20%. Los ids c0..c13 no cambian (los usa el borrador).
 const DEFAULT_CRITERIOS = [
-  ["Registro de clientes en bitácora / Pilot","Realizar de forma diaria en tiempo y forma. Registros correctos.",10],
-  ["Orden y limpieza del lugar de trabajo","Escritorio limpio, no comer en piso de venta, expedientes resguardados.",8],
-  ["Cumplir con código de vestimenta","Uniforme completo y presentación todos los días.",5],
-  ["Toma de inventarios","Apoyar inventarios cíclicos de la agencia con el gerente.",7],
-  ["Entrega de expedientes de venta","Expedientes completos, con firmas cotejadas y entregados a tiempo.",8],
-  ["Actualización de preciadores y promociones","Preciadores actualizados en exhibición de motocicletas.",5],
-  ["Actitud y trabajo en equipo","Disposición, colaboración con compañeros, manejo de conflictos.",15],
-  ["Disposición para salir a volantear","Actitud y disponibilidad para salir a volantear y prospectar fuera de la agencia.",5],
-  ["Cumplimiento de reseñas","Gestión y cumplimiento de reseñas de clientes.",8],
-  ["Expedientes sin observaciones (correos de faltantes)","No haber recibido correos en la semana por faltantes en expedientes.",6],
-  ["Puntualidad y asistencia","Cumplimiento de horario y asistencia en la semana.",6],
-  ["Cumplimiento de meta de ventas","Avance vs meta de ventas asignada en la semana.",8],
-  ["Uso correcto de Pilot y VentoCredit","Captura y seguimiento correcto en ambos sistemas.",5],
-  ["Mystery shopper / atención en piso","Resultado o desempeño observado en atención a clientes en piso de venta.",4],
-].map((c,i)=>({id:'c'+i, nombre:c[0], descripcion:c[1], peso:c[2], activo:true}));
+  ["c0","Registro de clientes en bitácora / Pilot","Realizar de forma diaria en tiempo y forma. Registros correctos.",9],
+  ["c1","Orden y limpieza del lugar de trabajo","Escritorio limpio, no comer en piso de venta, expedientes resguardados.",4],
+  ["c2","Cumplir con código de vestimenta","Uniforme completo y presentación todos los días.",4],
+  ["c3","Toma de inventarios","Apoyar inventarios cíclicos de la agencia con el gerente.",4],
+  ["c4","Entrega de expedientes de venta","Expedientes completos, con firmas cotejadas y entregados a tiempo.",7],
+  ["c5","Actualización de preciadores y promociones","Preciadores actualizados en exhibición de motocicletas.",4],
+  ["c6","Actitud y trabajo en equipo","Disposición, colaboración con compañeros, manejo de conflictos.",8],
+  ["c7","Disposición para salir a volantear","Actitud y disponibilidad para salir a volantear y prospectar fuera de la agencia.",5],
+  ["c8","Cumplimiento de reseñas","Gestión y cumplimiento de reseñas de clientes.",6],
+  ["c9","Expedientes sin observaciones (correos de faltantes)","No haber recibido correos en la semana por faltantes en expedientes.",5],
+  ["c10","Puntualidad y asistencia","Cumplimiento de horario y asistencia en la semana.",6],
+  ["c11","Cumplimiento de meta de ventas","Avance vs meta de ventas asignada en la semana.",12],
+  ["cnum","Conocimiento de sus números","Conoce su meta, avance, motos vendidas, top 3 de modelos, mezcla crédito/contado y ticket promedio.",6],
+  ["ccot","Cumplimiento de cotizaciones","Cotización a cada prospecto atendido y seguimiento en tiempo hasta cierre o descarte.",9],
+  ["c12","Resultado de VentoCredit","Resultados obtenidos en VentoCredit en la semana.",7],
+  ["c13","Mystery shopper / atención en piso","Resultado o desempeño observado en atención a clientes en piso de venta.",4],
+].map(c => ({ id: c[0], nombre: c[1], descripcion: c[2], peso: c[3], activo: true, ...(c[0] === 'cnum' ? { resultados: true } : {}) }));
 
 const DEFAULT_ASESORES = ["OSVALDO MORA TORRES","KEVIN ESTEBAN SALAS SALDIVAR"];
 
@@ -39,6 +43,42 @@ let state = {
   asesores: loadJSON('vento_asesores', DEFAULT_ASESORES),
   historial: loadJSON('vento_historial', []),
 };
+
+// Migración a v2 de los criterios que el dispositivo ya tenía guardados (v1):
+// - c12 "Uso correcto de Pilot y VentoCredit" pasa a "Resultado de VentoCredit"
+// - se agregan "Conocimiento de sus números" y "Cumplimiento de cotizaciones" después de la meta
+// - si los pesos seguían como venían en v1 (sin editar), se cambian por los de v2;
+//   si el usuario ya los había editado, se respetan y los nuevos entran con 0%.
+(() => {
+  const PESOS_V1 = { c0:10, c1:8, c2:5, c3:7, c4:8, c5:5, c6:15, c7:5, c8:8, c9:6, c10:6, c11:8, c12:5, c13:4 };
+  const crit = state.criterios;
+  let cambio = false;
+  const c12 = crit.find(x => x.id === 'c12' && x.nombre === 'Uso correcto de Pilot y VentoCredit');
+  if (c12) {
+    c12.nombre = 'Resultado de VentoCredit';
+    if (c12.descripcion === 'Captura y seguimiento correcto en ambos sistemas.') c12.descripcion = 'Resultados obtenidos en VentoCredit en la semana.';
+    cambio = true;
+  }
+  const faltaNuevo = !crit.some(x => x.id === 'cnum') || !crit.some(x => x.id === 'ccot');
+  const pesosSinEditar = faltaNuevo && Object.entries(PESOS_V1).every(([id, p]) => {
+    const x = crit.find(y => y.id === id);
+    return x && Number(x.peso) === p;
+  });
+  let tras = crit.findIndex(x => x.id === 'c11');
+  ['cnum', 'ccot'].forEach(id => {
+    if (crit.some(x => x.id === id)) { tras = crit.findIndex(x => x.id === id); return; }
+    const nuevo = { ...DEFAULT_CRITERIOS.find(x => x.id === id) };
+    if (!pesosSinEditar) nuevo.peso = 0;
+    tras = tras >= 0 ? tras + 1 : crit.length;
+    crit.splice(tras, 0, nuevo);
+    cambio = true;
+  });
+  if (pesosSinEditar) {
+    DEFAULT_CRITERIOS.forEach(d => { const x = crit.find(y => y.id === d.id); if (x) x.peso = d.peso; });
+  }
+  if (cambio) saveJSON('vento_criterios', crit);
+})();
+
 function persist() {
   saveJSON('vento_criterios', state.criterios);
   saveJSON('vento_asesores', state.asesores);
@@ -78,6 +118,62 @@ function sugerirPeriodo(fechaISO) {
 }
 
 /* ============================================================
+   2b) RESULTADOS DEL MES (informativos: no cambian la calificación)
+   Se capturan acumulados del mes al día de la evaluación; el ritmo esperado
+   se calcula con el día del mes de la fecha de la evaluación.
+   ============================================================ */
+const MESES_LARGOS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function resultadosVacios() {
+  return { meta: '', vendidas: '', credito: '', contado: '', ticket: '', top: [{modelo:'',unidades:''},{modelo:'',unidades:''},{modelo:'',unidades:''}] };
+}
+function hayResultados(r) {
+  if (!r) return false;
+  return ['meta','vendidas','credito','contado','ticket'].some(k => String(r[k]).trim() !== '') ||
+    r.top.some(t => t.modelo.trim() || String(t.unidades).trim());
+}
+const num = v => (v === '' || v == null || isNaN(Number(v))) ? null : Number(v);
+const pct = x => Math.round(x * 100) + '%';
+const uno = x => String(Math.round(x * 10) / 10);
+const dinero = x => '$' + Math.round(x).toLocaleString('es-MX');
+
+// Devuelve el corte del mes y las líneas de resumen (las mismas para pantalla y PDF).
+function analizarResultados(r, fechaISO) {
+  const d = new Date(fechaISO + 'T00:00:00');
+  const valida = !isNaN(d);
+  const dia = valida ? d.getDate() : 0;
+  const diasMes = valida ? new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() : 0;
+  const out = {
+    corte: valida ? `corte al día ${dia} de ${diasMes} de ${MESES_LARGOS[d.getMonth()]}` : '',
+    lineas: [], avisos: [], estado: null, top: [],
+  };
+  const meta = num(r.meta), vend = num(r.vendidas), cred = num(r.credito), cont = num(r.contado), ticket = num(r.ticket);
+
+  if (meta && vend != null && valida) {
+    const esperadoPct = dia / diasMes;
+    const deberia = meta * esperadoPct;
+    const proy = vend / dia * diasMes;
+    out.lineas.push(`Avance: ${vend} de ${meta} motos (${pct(vend / meta)})`);
+    out.lineas.push(`Ritmo esperado al día ${dia}: ${uno(deberia)} motos (${pct(esperadoPct)} del mes)`);
+    // Los primeros días del mes la proyección no dice nada (1 venta el día 1 = 31 en el mes).
+    if (dia >= 5) out.lineas.push(`Proyección al cierre: ${uno(proy)} motos (${pct(proy / meta)} de la meta)`);
+    const atraso = deberia - vend;
+    out.estado = atraso <= 0.05
+      ? { ok: true, texto: vend >= meta ? 'Meta cumplida' : 'Va en línea con la meta' }
+      : { ok: false, texto: `Va atrasado ${uno(atraso)} motos vs el ritmo esperado` };
+  } else if (vend != null) {
+    out.lineas.push(`Motos vendidas en el mes: ${vend}`);
+  }
+  if (cred != null || cont != null) {
+    const tot = (cred || 0) + (cont || 0);
+    if (tot > 0) out.lineas.push(`Mezcla: crédito ${cred || 0} (${pct((cred || 0) / tot)}) · contado ${cont || 0} (${pct((cont || 0) / tot)})`);
+    if (vend != null && tot !== vend) out.avisos.push(`Crédito + contado (${tot}) no coincide con motos vendidas (${vend})`);
+  }
+  if (ticket != null) out.lineas.push(`Ticket promedio: ${dinero(ticket)}`);
+  out.top = r.top.filter(t => t.modelo.trim()).map(t => t.modelo.trim() + (num(t.unidades) != null ? ` (${num(t.unidades)})` : ''));
+  return out;
+}
+
+/* ============================================================
    3) BORRADOR (autoguardado de la evaluación en curso)
    ============================================================ */
 function nuevoBorrador() {
@@ -86,6 +182,7 @@ function nuevoBorrador() {
     asesor: state.asesores[0] || '',
     fecha, periodo: sugerirPeriodo(fecha), periodoAuto: true,
     gerente: loadJSON('vento_gerente', ''),
+    resultados: resultadosVacios(),
     califs: {}, comentarios: {}, obs: '',
     firmaG: null, firmaA: null,          // dataURL PNG del trazo
     generado: null,                       // {texto, calificacionGeneral} cuando ya se generó el PDF
@@ -93,6 +190,7 @@ function nuevoBorrador() {
   };
 }
 let borrador = loadJSON('vento_borrador', null) || nuevoBorrador();
+if (!borrador.resultados) borrador.resultados = resultadosVacios();   // borradores de antes de v2
 
 let _timerBorrador = null;
 function guardarBorrador(inmediato) {
@@ -108,7 +206,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && _ti
 window.addEventListener('pagehide', () => { if (_timerBorrador) guardarBorrador(true); });
 
 function borradorTieneDatos(b) {
-  return Object.keys(b.califs).length > 0 || !!b.obs.trim() || !!b.firmaG || !!b.firmaA ||
+  return Object.keys(b.califs).length > 0 || !!b.obs.trim() || !!b.firmaG || !!b.firmaA || hayResultados(b.resultados) ||
     Object.values(b.comentarios).some(c => c && c.trim());
 }
 function descartarBorrador() {
@@ -290,6 +388,7 @@ function renderNueva() {
         <div class="criterio" data-id="${c.id}">
           <div class="nombre">${escapeHtml(c.nombre)}</div>
           <div class="desc">${escapeHtml(c.descripcion || '')} <span class="peso">· peso ${c.peso}%</span></div>
+          ${c.resultados ? htmlResultados() : ''}
           <div class="escala" data-for="${c.id}">
             ${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button type="button" data-val="${n}" class="${borrador.califs[c.id]===n?'sel':''}">${n}</button>`).join('')}
           </div>
@@ -340,8 +439,15 @@ function renderNueva() {
     borrador.periodoAuto = e.target.value.trim() === '';
     guardarBorrador();
   });
+  sec.querySelectorAll('[data-r]').forEach(inp => inp.addEventListener('input', () => {
+    borrador.resultados[inp.dataset.r] = inp.value; guardarBorrador(); actualizarResumen(); mostrarAvisoBorrador();
+  }));
+  sec.querySelectorAll('[data-top]').forEach(inp => inp.addEventListener('input', () => {
+    borrador.resultados.top[inp.dataset.top][inp.dataset.campo] = inp.value; guardarBorrador(); mostrarAvisoBorrador();
+  }));
   document.getElementById('fFecha').addEventListener('change', (e) => {
     borrador.fecha = e.target.value;
+    actualizarResumen();
     if (borrador.periodoAuto) {
       borrador.periodo = sugerirPeriodo(e.target.value);
       document.getElementById('fPeriodo').value = borrador.periodo;
@@ -362,6 +468,46 @@ function renderNueva() {
 
   document.getElementById('btnGenerar').addEventListener('click', onGenerar);
   updateCalifGen();
+  actualizarResumen();
+}
+
+// Campos de resultados del mes; van dentro del criterio "Conocimiento de sus números".
+function htmlResultados() {
+  return `
+    <div class="resultados">
+      <div class="res-titulo">Resultados del mes</div>
+      <p class="muted" id="rCorte"></p>
+    <div class="row">
+      <div><label>Meta del mes (motos)</label><input type="number" inputmode="numeric" min="0" data-r="meta" value="${escapeHtml(borrador.resultados.meta)}"></div>
+      <div><label>Motos vendidas en el mes</label><input type="number" inputmode="numeric" min="0" data-r="vendidas" value="${escapeHtml(borrador.resultados.vendidas)}"></div>
+    </div>
+    <div class="row">
+      <div><label>Ventas a crédito</label><input type="number" inputmode="numeric" min="0" data-r="credito" value="${escapeHtml(borrador.resultados.credito)}"></div>
+      <div><label>Ventas de contado</label><input type="number" inputmode="numeric" min="0" data-r="contado" value="${escapeHtml(borrador.resultados.contado)}"></div>
+    </div>
+    <label>Ticket promedio ($)</label>
+    <input type="number" inputmode="decimal" min="0" data-r="ticket" value="${escapeHtml(borrador.resultados.ticket)}" placeholder="Ej. 45000">
+    <label>Top 3 modelos más vendidos</label>
+    ${borrador.resultados.top.map((t, i) => `
+      <div class="toprow">
+        <input type="text" data-top="${i}" data-campo="modelo" placeholder="Modelo ${i + 1}" value="${escapeHtml(t.modelo)}">
+        <input type="number" inputmode="numeric" min="0" data-top="${i}" data-campo="unidades" placeholder="Uds." value="${escapeHtml(t.unidades)}">
+      </div>`).join('')}
+    <div id="rResumen"></div>
+    </div>`;
+}
+
+function actualizarResumen() {
+  const caja = document.getElementById('rResumen');
+  if (!caja) return;
+  const a = analizarResultados(borrador.resultados, borrador.fecha);
+  document.getElementById('rCorte').textContent = a.corte ? `Acumulado del mes, ${a.corte}` : '';
+  if (!a.lineas.length && !a.avisos.length) { caja.innerHTML = ''; return; }
+  caja.innerHTML = `<div class="resumen-res">
+    ${a.estado ? `<div class="estado ${a.estado.ok ? 'ok' : 'bad'}">${escapeHtml(a.estado.texto)}</div>` : ''}
+    ${a.lineas.map(l => `<div>${escapeHtml(l)}</div>`).join('')}
+    ${a.avisos.map(l => `<div class="aviso">⚠ ${escapeHtml(l)}</div>`).join('')}
+  </div>`;
 }
 
 // La franja "Borrador guardado" aparece en cuanto hay algo capturado.
@@ -403,9 +549,11 @@ async function construirPDF() {
     periodo: borrador.periodo || '(sin especificar)',
     gerenteNombre: borrador.gerente || 'Gerente',
     observaciones: borrador.obs,
+    resultados: hayResultados(borrador.resultados) ? analizarResultados(borrador.resultados, borrador.fecha) : null,
     detalle: activos.map(c => ({ nombre: c.nombre, peso: c.peso, calificacion: borrador.califs[c.id], comentario: borrador.comentarios[c.id] || '' })),
     calificacionGeneral: general,
     firmaGerente, firmaAsesor,
+    logo: typeof LOGO_VENTO !== 'undefined' ? LOGO_VENTO : null,
     generadoTexto: borrador.generado ? borrador.generado.texto : new Date().toLocaleString('es-MX'),
   };
   return buildEvaluacionPDF(ev);
@@ -440,6 +588,7 @@ async function onGenerar() {
     state.historial.unshift({
       fecha: borrador.fecha, asesor: borrador.asesor, periodo: borrador.periodo,
       calificacionGeneral: borrador.generado.calificacionGeneral, gerenteNombre: borrador.gerente,
+      resultados: hayResultados(borrador.resultados) ? borrador.resultados : null,
       timestamp: new Date().toISOString(),
     });
     persist();
@@ -548,7 +697,7 @@ function renderCriterios() {
     row.className = 'card';
     row.style.padding = '10px';
     row.innerHTML = `
-      <div class="chk"><input type="checkbox" data-f="activo" ${c.activo?'checked':''}> Activo</div>
+      <label class="chk"><input type="checkbox" data-f="activo" ${c.activo?'checked':''}> Activo</label>
       <label>Nombre</label>
       <input type="text" data-f="nombre" value="${escapeHtml(c.nombre)}">
       <label>Descripción</label>

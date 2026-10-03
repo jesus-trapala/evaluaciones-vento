@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#1f2937">
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -12,15 +11,40 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/styles.css?v=1">
+<meta name="theme-color" content="#f7f3ec">
+<script>
+/* Modo claro/oscuro antes de pintar (diseño-vento.md). Clave compartida entre
+   todas las apps Vento: "vento-tema" (se lee también la anterior, "temaVento"). */
+(function(){
+  var t=null;
+  try{t=localStorage.getItem("vento-tema")||localStorage.getItem("temaVento");}catch(e){}
+  if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
+  document.documentElement.dataset.theme=t;
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&family=Oswald:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css?v=2">
 </head>
 <body>
 
 <div class="top">
-  <header>
-    <h1>Evaluaciones Vento Chalco</h1>
-    <p>Funciona sin internet · tus datos se quedan en este dispositivo</p>
-  </header>
+<div class="vh" role="banner">
+  <div class="vh-in">
+    <a class="vh-logo" href="https://jesus-trapala.github.io/portal-vento/" aria-label="Portal Vento">
+      <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.6 4h4.5L12 15.1 16.9 4h4.5L14.2 20.5H9.8z" fill="#fff"/></svg>
+    </a>
+    <div class="vh-txt"><span class="vh-ag">AGENCIA 16025</span><span class="vh-app">Evaluaciones</span></div>
+    <div class="vh-acc">
+      <a class="vh-portal" href="https://jesus-trapala.github.io/portal-vento/">← Portal</a>
+      <button type="button" class="vh-tema" id="btn-tema" title="Cambiar modo claro / oscuro" aria-label="Cambiar modo claro / oscuro">
+        <svg class="ico-luna" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="ico-sol" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
   <nav id="tabs">
     <button data-tab="nueva" class="active">Nueva evaluación</button>
     <button data-tab="criterios">Criterios</button>
@@ -30,6 +54,7 @@
 </div>
 
 <main>
+  <p class="nota-top">Funciona sin internet · tus datos se quedan en este dispositivo</p>
   <section id="tab-nueva"></section>
   <section id="tab-criterios" style="display:none"></section>
   <section id="tab-asesores" style="display:none"></section>
@@ -39,8 +64,9 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/pdf.js?v=1"></script>
-<script src="js/app.js?v=1"></script>
+<script src="js/logo.js?v=2"></script>
+<script src="js/pdf.js?v=2"></script>
+<script src="js/app.js?v=2"></script>
 <script>
   if ('serviceWorker' in navigator) {
     // Si llega una versión nueva de la app, recarga una vez para usarla.
@@ -53,6 +79,22 @@
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
       .then(r => r.update()).catch(() => {}));
   }
+</script>
+<script>
+/* Botón luna/sol: guarda el modo en "vento-tema" (compartido entre las apps Vento). Solo diseño. */
+(function(){
+  var raiz=document.documentElement, meta=document.querySelector('meta[name="theme-color"]');
+  function pintar(){ if(meta) meta.content = raiz.dataset.theme==="dark" ? "#0d0f14" : "#f7f3ec"; }
+  pintar();
+  var b=document.getElementById("btn-tema");
+  if(b) b.addEventListener("click",function(){
+    var nuevo = raiz.dataset.theme==="dark" ? "light" : "dark";
+    raiz.dataset.theme = nuevo;
+    try{ localStorage.setItem("vento-tema",nuevo); localStorage.setItem("temaVento",nuevo); }catch(e){}
+    pintar();
+    window.dispatchEvent(new CustomEvent("vento-tema",{detail:nuevo}));
+  });
+})();
 </script>
 </body>
 </html>

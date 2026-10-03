@@ -114,86 +114,200 @@ function wrapText(text, maxCharsPerLine) {
   return lines.length ? lines : [''];
 }
 
-/* ev.firmaGerente / ev.firmaAsesor = { jpeg: dataURL, w, h } ya recortadas */
+/* Ancho aproximado de texto en Helvetica (para centrar / alinear a la derecha). */
+function anchoTexto(str, size, bold) {
+  let w = 0;
+  for (const ch of String(str)) {
+    if ('0123456789$'.includes(ch)) w += 556;
+    else if ('.,:;/ ()'.includes(ch)) w += 278;
+    else if (ch === '%') w += 889;
+    else if (ch === '-') w += 333;
+    else if (ch >= 'A' && ch <= 'Z' || 'ÁÉÍÓÚÑ'.includes(ch)) w += bold ? 722 : 667;
+    else w += bold ? 590 : 540;
+  }
+  return w / 1000 * size;
+}
+
+/* Color según calificación (1-10): verde / ámbar / rojo */
+function colorCalif(n) {
+  n = Number(n);
+  if (n >= 8) return [0.09, 0.50, 0.25];
+  if (n >= 6) return [0.80, 0.50, 0.02];
+  return [0.75, 0.10, 0.12];
+}
+
+/* ev.firmaGerente / ev.firmaAsesor = { jpeg: dataURL, w, h } ya recortadas.
+   ev.logo = { jpeg, w, h } (opcional) */
 function buildEvaluacionPDF(ev) {
   const doc = new PdfDoc();
   const F1 = doc.addFont('Helvetica');
   const F2 = doc.addFont('Helvetica-Bold');
-  const PW = 612, PH = 792, MARGIN = 46;
-  let y, ops, imageRefsThisPage;
+  const F3 = doc.addFont('Helvetica-Oblique');
+  const PW = 612, PH = 792, M = 40, W = PW - M * 2;
+  const PIE = 52;                      // espacio reservado para el pie de página
+  const ROJO = [0.70, 0.07, 0.12], OSCURO = [0.12, 0.16, 0.22], GRIS = [0.42, 0.45, 0.50];
+  const logoNum = ev.logo ? doc.addImage(dataUrlToBytes(ev.logo.jpeg), ev.logo.w, ev.logo.h) : null;
 
-  function newPage() { ops = ''; y = PH - MARGIN; imageRefsThisPage = {}; }
-  function flushPage() {
-    doc.addPage({ width: PW, height: PH, content: ops, fontRefs: { F1, F2 }, imageRefs: imageRefsThisPage });
-  }
-  function ensureSpace(h) { if (y - h < MARGIN + 20) { flushPage(); newPage(); } }
-  function text(str, x, size, bold) {
-    ops += `BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${y} Td (${escapePdfText(str)}) Tj ET\n`;
-  }
-  function line(str, size, bold, gap) {
-    ensureSpace(size + (gap || 6));
-    text(str, MARGIN, size, bold);
-    y -= (size + (gap || 6));
-  }
-  function paragraph(str, size, maxChars, lh) {
-    for (const l of wrapText(str, maxChars)) line(l, size, false, lh || (size + 4));
-  }
-  function hr() {
-    ensureSpace(10);
-    ops += `${MARGIN} ${y} m ${PW - MARGIN} ${y} l S\n`;
-    y -= 10;
-  }
-
-  newPage();
-  line('Evaluación Semanal - Agencia Vento Chalco', 16, true, 22);
-  line(`Asesor: ${ev.asesor}     Fecha: ${ev.fecha}     Periodo: ${ev.periodo}`, 11, false, 18);
-  hr();
-
-  line('Criterios evaluados', 12, true, 16);
-  for (const row of ev.detalle) {
-    const nombreLineas = wrapText(`${row.nombre}  (peso ${row.peso}%)`, 78);
-    ensureSpace(16 + nombreLineas.length * 14);
-    text(`${row.calificacion}/10`, PW - MARGIN - 40, 10.5, true);
-    for (const l of nombreLineas) { text(l, MARGIN, 10.5, true); y -= 14; }
-    if (row.comentario) {
-      for (const l of wrapText(row.comentario, 100)) { ensureSpace(12); text('   ' + l, MARGIN, 9.5, false); y -= 12; }
+  const paginas = [];
+  let ops, imgs, y;
+  function nuevaPagina(continuacion) {
+    ops = ''; imgs = {}; y = PH - M;
+    if (logoNum) imgs.Logo = logoNum;
+    if (continuacion) {
+      // encabezado chico en páginas siguientes
+      if (logoNum) { const h = 18, w = h * ev.logo.w / ev.logo.h; ops += `q ${w} 0 0 ${h} ${M} ${y - h} cm /Logo Do Q\n`; }
+      txt(`Evaluación semanal · ${ev.asesor} · ${ev.fecha}`, PW - M, y - 13, 9, F1, GRIS, 'der');
+      y -= 26;
+      linea(M, y, PW - M, y, ROJO, 1.2);
+      y -= 14;
     }
-    y -= 4;
   }
-  hr();
-  ensureSpace(30);
-  text('Calificación general ponderada:', MARGIN, 12, true);
-  text(String(ev.calificacionGeneral), PW - MARGIN - 40, 14, true);
-  y -= 26;
+  function cerrarPagina() { paginas.push({ ops, imgs }); }
+  function espacio(h, alSaltar) {
+    if (y - h < PIE) { cerrarPagina(); nuevaPagina(true); if (alSaltar) alSaltar(); return true; }
+    return false;
+  }
+  function color(c, relleno) { return `${c[0]} ${c[1]} ${c[2]} ${relleno ? 'rg' : 'RG'}\n`; }
+  function txt(str, x, yy, size, font, c, alin) {
+    const fn = font === F2 ? 'F2' : font === F3 ? 'F3' : 'F1';
+    if (alin === 'der') x -= anchoTexto(str, size, font === F2);
+    if (alin === 'centro') x -= anchoTexto(str, size, font === F2) / 2;
+    ops += color(c || [0, 0, 0], true);
+    ops += `BT /${fn} ${size} Tf ${x.toFixed(2)} ${yy.toFixed(2)} Td (${escapePdfText(str)}) Tj ET\n`;
+    ops += '0 0 0 rg\n';
+  }
+  function rect(x, yy, w, h, relleno, borde) {
+    if (relleno) ops += color(relleno, true) + `${x} ${yy} ${w} ${h} re f\n`;
+    if (borde) ops += color(borde, false) + `0.6 w ${x} ${yy} ${w} ${h} re S\n0 0 0 RG\n`;
+    ops += '0 0 0 rg\n';
+  }
+  function linea(x1, y1, x2, y2, c, grosor) {
+    ops += color(c || [0, 0, 0], false) + `${grosor || 0.6} w ${x1} ${y1} m ${x2} ${y2} l S\n0 0 0 RG 1 w\n`;
+  }
+  function tituloSeccion(t, extra) {
+    espacio(30);
+    rect(M, y - 9, 4, 11, ROJO);
+    txt(t, M + 10, y - 7.5, 10.5, F2, OSCURO);
+    if (extra) txt(extra, M + 10 + anchoTexto(t, 10.5, true) + 8, y - 7.5, 8.5, F1, GRIS);
+    y -= 20;
+  }
 
-  line('Observaciones / compromisos de la semana', 12, true, 16);
-  paragraph(ev.observaciones || '(sin observaciones)', 10.5, 100, 14);
-  y -= 10;
+  /* ---------- Encabezado ---------- */
+  nuevaPagina(false);
+  if (logoNum) {
+    const h = 30, w = h * ev.logo.w / ev.logo.h;
+    ops += `q ${w} 0 0 ${h} ${M} ${y - h} cm /Logo Do Q\n`;
+  }
+  txt('EVALUACIÓN SEMANAL DE DESEMPEÑO', PW - M, y - 12, 13, F2, OSCURO, 'der');
+  txt('Agencia Vento Chalco', PW - M, y - 26, 9.5, F1, GRIS, 'der');
+  y -= 40;
+  linea(M, y, PW - M, y, ROJO, 2);
+  y -= 12;
 
-  // Firmas: si no caben, saltar de página. Cada firma se ajusta a su caja SIN deformarse.
-  ensureSpace(150);
-  const boxW = (PW - MARGIN * 2 - 20) / 2, boxH = 70;
-  const sigTop = y;
-  const lineaY = sigTop - boxH - 4;
-  [[ev.firmaGerente, 'ImG', MARGIN], [ev.firmaAsesor, 'ImA', MARGIN + boxW + 20]].forEach(([f, nombre, x0]) => {
-    imageRefsThisPage[nombre] = doc.addImage(dataUrlToBytes(f.jpeg), f.w, f.h);
+  /* ---------- Datos + calificación general ---------- */
+  const panelH = 60, cajaW = 118;
+  rect(M, y - panelH, W, panelH, [0.95, 0.96, 0.97]);
+  const col1 = M + 12, col2 = M + 12 + (W - cajaW) / 2;
+  const dato = (etq, val, x, yy) => { txt(etq, x, yy, 7, F2, GRIS); txt(val, x, yy - 12, 10, F2, OSCURO); };
+  dato('ASESOR', ev.asesor, col1, y - 14);
+  dato('PERIODO', ev.periodo, col1, y - 40);
+  dato('FECHA', ev.fecha, col2, y - 14);
+  dato('EVALUÓ', ev.gerenteNombre || 'Gerente', col2, y - 40);
+  const cc = colorCalif(ev.calificacionGeneral);
+  rect(PW - M - cajaW, y - panelH, cajaW, panelH, cc);
+  txt('CALIFICACIÓN GENERAL', PW - M - cajaW / 2, y - 15, 7, F2, [1, 1, 1], 'centro');
+  txt(String(ev.calificacionGeneral), PW - M - cajaW / 2, y - 42, 24, F2, [1, 1, 1], 'centro');
+  txt('de 10', PW - M - cajaW / 2, y - 54, 7, F1, [1, 1, 1], 'centro');
+  y -= panelH + 16;
+
+  /* ---------- Resultados del mes ---------- */
+  if (ev.resultados) {
+    const r = ev.resultados;
+    tituloSeccion('RESULTADOS DEL MES', r.corte ? `(${r.corte})` : '');
+    const filas = [];
+    if (r.estado) filas.push({ t: r.estado.texto, f: F2, c: r.estado.ok ? [0.09, 0.50, 0.25] : [0.75, 0.10, 0.12] });
+    r.lineas.forEach(l => filas.push({ t: l, f: F1, c: OSCURO }));
+    if (r.top.length) filas.push({ t: 'Top modelos: ' + r.top.map((t, i) => `${i + 1}) ${t}`).join('    '), f: F1, c: OSCURO });
+    r.avisos.forEach(l => filas.push({ t: 'Aviso: ' + l, f: F3, c: [0.70, 0.40, 0.02] }));
+    const h = filas.length * 14 + 12;
+    espacio(h);
+    rect(M, y - h, W, h, null, [0.85, 0.87, 0.90]);
+    let yy = y - 16;
+    filas.forEach(f => { txt(f.t, M + 12, yy, 9.5, f.f, f.c); yy -= 14; });
+    y -= h + 16;
+  }
+
+  /* ---------- Tabla de criterios ---------- */
+  const xPeso = PW - M - 100, xCal = PW - M - 50;
+  function encabezadoTabla() {
+    rect(M, y - 18, W, 18, OSCURO);
+    txt('CRITERIO', M + 8, y - 12.5, 8, F2, [1, 1, 1]);
+    txt('PESO', xPeso + 25, y - 12.5, 8, F2, [1, 1, 1], 'centro');
+    txt('CALIF.', xCal + 25, y - 12.5, 8, F2, [1, 1, 1], 'centro');
+    y -= 18;
+  }
+  tituloSeccion('CRITERIOS EVALUADOS');
+  espacio(40);
+  encabezadoTabla();
+  ev.detalle.forEach((row, i) => {
+    const nom = wrapText(row.nombre, 72);
+    const com = row.comentario ? wrapText(row.comentario, 95) : [];
+    const h = 5 + nom.length * 11.5 + com.length * 10.5 + 3;
+    espacio(h, encabezadoTabla);
+    if (i % 2 === 1) rect(M, y - h, W, h, [0.97, 0.97, 0.98]);
+    let yy = y - 12;
+    nom.forEach(l => { txt(l, M + 8, yy, 9.5, F2, OSCURO); yy -= 11.5; });
+    com.forEach(l => { txt(l, M + 14, yy + 1, 8.5, F3, GRIS); yy -= 10.5; });
+    txt(`${row.peso}%`, xPeso + 25, y - 12, 9, F1, GRIS, 'centro');
+    txt(String(row.calificacion), xCal + 25, y - 12, 11, F2, colorCalif(row.calificacion), 'centro');
+    linea(M, y - h, PW - M, y - h, [0.88, 0.89, 0.91], 0.4);
+    y -= h;
+  });
+  espacio(22);
+  rect(M, y - 22, W, 22, [0.93, 0.94, 0.96]);
+  txt('Calificación general ponderada', M + 8, y - 14.5, 10, F2, OSCURO);
+  txt(String(ev.calificacionGeneral), xCal + 25, y - 15, 12, F2, cc, 'centro');
+  y -= 22 + 20;
+
+  /* ---------- Observaciones ---------- */
+  tituloSeccion('OBSERVACIONES Y COMPROMISOS DE LA SEMANA');
+  const obs = wrapText(ev.observaciones || '(sin observaciones)', 100);
+  let restantes = obs.slice();
+  while (restantes.length) {
+    espacio(30);
+    const caben = Math.max(1, Math.floor((y - PIE - 12) / 13));
+    const tramo = restantes.splice(0, caben);
+    const h = tramo.length * 13 + 12;
+    rect(M, y - h, W, h, null, [0.85, 0.87, 0.90]);
+    let yy = y - 15;
+    tramo.forEach(l => { txt(l, M + 10, yy, 9.5, F1, OSCURO); yy -= 13; });
+    y -= h + 20;
+  }
+
+  /* ---------- Firmas ---------- */
+  espacio(125);
+  const boxW = (W - 40) / 2, boxH = 64;
+  const lineaY = y - boxH - 14;
+  [[ev.firmaGerente, 'ImG', M, 'Firma del gerente', ev.gerenteNombre || 'Gerente'],
+   [ev.firmaAsesor, 'ImA', M + boxW + 40, 'Firma del asesor', ev.asesor]].forEach(([f, nombre, x0, etq, quien]) => {
+    imgs[nombre] = doc.addImage(dataUrlToBytes(f.jpeg), f.w, f.h);
     const esc = Math.min(boxW / f.w, boxH / f.h);
     const w = f.w * esc, h = f.h * esc;
-    const x = x0 + (boxW - w) / 2;
-    ops += `q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${(lineaY + 2).toFixed(2)} cm /${nombre} Do Q\n`;
-    ops += `${x0} ${lineaY} m ${x0 + boxW} ${lineaY} l S\n`;
+    ops += `q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${(x0 + (boxW - w) / 2).toFixed(2)} ${(lineaY + 2).toFixed(2)} cm /${nombre} Do Q\n`;
+    linea(x0, lineaY, x0 + boxW, lineaY, OSCURO, 0.8);
+    txt(quien, x0 + boxW / 2, lineaY - 13, 9.5, F2, OSCURO, 'centro');
+    txt(etq, x0 + boxW / 2, lineaY - 24, 8, F1, GRIS, 'centro');
   });
-  y = lineaY - 14;
-  text('Firma Gerente', MARGIN, 10, true);
-  text('Firma Asesor', MARGIN + boxW + 20, 10, true);
-  y -= 14;
-  text(ev.gerenteNombre || 'Gerente', MARGIN, 9.5, false);
-  text(ev.asesor, MARGIN + boxW + 20, 9.5, false);
-  y -= 24;
+  y = lineaY - 30;
+  cerrarPagina();
 
-  ensureSpace(14);
-  text(`Generado el ${ev.generadoTexto}`, MARGIN, 8.5, false);
-
-  flushPage();
+  /* ---------- Pie en cada página ---------- */
+  paginas.forEach((p, i) => {
+    ops = p.ops;
+    linea(M, 38, PW - M, 38, [0.80, 0.82, 0.85], 0.5);
+    txt(`Generado el ${ev.generadoTexto} · Herramienta de uso interno · Agencia Vento Chalco`, M, 27, 7, F1, GRIS);
+    txt(`Página ${i + 1} de ${paginas.length}`, PW - M, 27, 7, F1, GRIS, 'der');
+    doc.addPage({ width: PW, height: PH, content: ops, fontRefs: { F1, F2, F3 }, imageRefs: p.imgs });
+  });
   return doc.build();
 }
