@@ -25,17 +25,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&family=Oswald:wght@600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=3">
 </head>
 <body>
 
 <div class="top">
 <div class="vh" role="banner">
   <div class="vh-in">
-    <a class="vh-logo" href="https://jesus-trapala.github.io/portal-vento/" aria-label="Portal Vento">
-      <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.6 4h4.5L12 15.1 16.9 4h4.5L14.2 20.5H9.8z" fill="#fff"/></svg>
-    </a>
-    <div class="vh-txt"><span class="vh-ag">AGENCIA 16025</span><span class="vh-app">Evaluaciones</span></div>
+    <a class="vh-marca" href="https://jesus-trapala.github.io/portal-vento/" aria-label="Portal Vento">Vento Chalco<span>· Evaluaciones</span></a>
     <div class="vh-acc">
       <a class="vh-portal" href="https://jesus-trapala.github.io/portal-vento/">← Portal</a>
       <button type="button" class="vh-tema" id="btn-tema" title="Cambiar modo claro / oscuro" aria-label="Cambiar modo claro / oscuro">
@@ -64,9 +61,9 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/logo.js?v=2"></script>
-<script src="js/pdf.js?v=2"></script>
-<script src="js/app.js?v=2"></script>
+<script src="js/logo.js?v=3"></script>
+<script src="js/pdf.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 <script>
   if ('serviceWorker' in navigator) {
     // Si llega una versión nueva de la app, recarga una vez para usarla.
@@ -94,6 +91,18 @@
     pintar();
     window.dispatchEvent(new CustomEvent("vento-tema",{detail:nuevo}));
   });
+})();
+</script>
+<script>
+/* Abierta desde la app Vento Chalco (?desde=app): el botón de regreso dice
+   "← App" y lleva a la app en lugar del Portal (diseño-vento.md §9).      */
+(function(){
+  var desde=false;
+  try{ desde=/[?&]desde=app(&|$)/.test(location.search);
+       if(desde) sessionStorage.setItem("vento-desde-app","1"); else desde=sessionStorage.getItem("vento-desde-app")==="1"; }catch(e){}
+  if(!desde) return;
+  var b=document.querySelector(".vh-portal"); if(!b) return;
+  b.href="https://jesus-trapala.github.io/cotizador-vento-chalco/#inicio"; b.textContent="← App";
 })();
 </script>
 </body>

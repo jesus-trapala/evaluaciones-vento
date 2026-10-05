@@ -29,6 +29,10 @@
 /* =====================  ENCABEZADO VENTO  ===================== */
 .vh{background:var(--bg);border-bottom:1px solid var(--border);font-family:var(--f-texto);color:var(--text)}
 .vh-in{max-width:var(--vh-max,1040px);margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.vh-marca{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;font-family:var(--f-titulo);font-weight:600;font-size:17px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vh-marca span{color:var(--muted);margin-left:.35em}
+.vh-marca:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:8px}
+@media(max-width:420px){.vh-marca{font-size:15px;letter-spacing:.02em}}
 .vh-logo{width:44px;height:44px;border-radius:12px;background:var(--logo);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:var(--sombra-mos);text-decoration:none}
 .vh-logo svg{display:block}
 .vh-txt{display:flex;flex-direction:column;min-width:0;flex:1}

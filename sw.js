@@ -3,7 +3,7 @@
    Al publicar una versión nueva, sube el número de VERSION aquí Y el ?v=
    de los <script>/<link> en index.html. */
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = 'evaluaciones-app-' + VERSION;
 const ARCHIVOS = [
   './',
